@@ -85,6 +85,25 @@ A comprehensive collection of command-line tools for advanced file and data mana
 ./compr archive.zip
 ```
 
+### File Organization
+
+#### `movef` - Advanced file organizer that moves all files from subdirectories to a destination directory with intelligent conflict resolution
+```bash
+# Move all files from subdirectories to destination directory
+./movef /source/directory /destination/directory
+```
+**Features:**
+- Moves files from all subdirectories to a single destination
+- Automatically renames files with duplicate names using folder names
+- Asks for confirmation before deleting empty subdirectories
+- Preserves file integrity during the move operation
+
+**Example:**
+```bash
+./movef /downloads/messy_folder /downloads/organized
+# Moves all files from subdirectories to organized folder
+```
+
 ### Specialized Tools
 
 #### `readqr` - QR code reader that decodes QR codes from image files using barcode recognition API
@@ -105,6 +124,7 @@ A comprehensive collection of command-line tools for advanced file and data mana
 ## 🚀 Key Features
 
 - **Multi-format Support** - Handle various file types and compression formats
+- **File Organization** - Advanced directory restructuring and file movement with conflict resolution
 - **Regex Support** - Advanced pattern matching for text search operations
 - **Colorized Output** - Enhanced visual feedback for better user experience
 - **Recursive Operations** - Deep directory traversal capabilities
@@ -144,7 +164,51 @@ sudo apt install locate findutils grep tar gzip p7zip-full bzip2 xz-utils zstd u
 sudo updatedb
 ```
 
-## 🚀 Installation & Setup
+## � Typical Workflows
+
+### Workflow 1: Directory Organization & Cleanup
+```bash
+# 1. Compare two directories to see differences
+./comparef /old/location /new/location
+
+# 2. Organize scattered files from subdirectories
+./movef /downloads/messy_folder /downloads/organized
+
+# 3. Search for specific files in organized directory
+./search # Follow prompts to search in /downloads/organized
+
+# 4. Compress organized files for archival
+./compr -cz /downloads/organized/
+```
+
+### Workflow 2: File Analysis & Deduplication
+```bash
+# 1. Generate file listing for analysis
+./list /project/directory > file_inventory.txt
+
+# 2. Search for duplicate content patterns
+./swd /project/directory "duplicate_pattern"
+
+# 3. Remove duplicate lines from data files
+./dupl data_file.txt
+
+# 4. Compress unique files
+./compr -cz unique_files/
+```
+
+### Workflow 3: Package Management & System Search
+```bash
+# 1. Search for installed packages
+./psearch -i software_name
+
+# 2. Locate system files
+./loc /usr/ config
+
+# 3. Search within configuration files
+./swf /etc/config.conf "setting_pattern"
+```
+
+## �🚀 Installation & Setup
 
 ### Clone the Repository
 ```bash
