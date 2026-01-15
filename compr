@@ -1,28 +1,136 @@
 #!/bin/bash
 
+# Interactive compression with archive type selection
+compress_interactive() {
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "📦 Select Archive Type:"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "  1) ZIP       - Universal, fast, widely supported"
+  echo "  2) TAR       - Unix standard, no compression"
+  echo "  3) TAR.GZ    - TAR + GZIP compression (good balance)"
+  echo "  4) TAR.BZ2   - TAR + BZIP2 compression (better ratio)"
+  echo "  5) TAR.XZ    - TAR + XZ compression (best ratio, slower)"
+  echo "  6) 7Z        - 7-Zip, excellent compression"
+  echo "  7) RAR       - WinRAR format (if rar installed)"
+  echo "  8) TAR.ZST   - TAR + Zstandard (fast + good ratio)"
+  echo "  9) ISO       - CD/DVD image format"
+  echo " 10) JAR       - Java archive (ZIP-based)"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo -n "Enter choice [1-10]: "
+  read choice
 
-compress_7zip() {
-  local output_path="compressed_files.7z"
-
-  echo "Compressing all files into $output_path with 7-Zip..."
-
-  # Compress all files provided as arguments
-  7z a "$output_path" "$@" > /dev/null
-
-  echo "Compression complete: $output_path"
+  case $choice in
+    1) compress_zip "$@" ;;
+    2) compress_tar "$@" ;;
+    3) compress_targz "$@" ;;
+    4) compress_tarbz2 "$@" ;;
+    5) compress_tarxz "$@" ;;
+    6) compress_7z "$@" ;;
+    7) compress_rar "$@" ;;
+    8) compress_tarzst "$@" ;;
+    9) compress_iso "$@" ;;
+    10) compress_jar "$@" ;;
+    *)
+      echo "❌ Invalid choice. Please select 1-10."
+      exit 1
+      ;;
+  esac
 }
 
-compress_zpaq() {
-  local output_path="compressed_files.zpaq"
-
-  echo "Compressing all files into $output_path with ZPAQ..."
-
-  # Compress all files provided as arguments
-  zpaq a "$output_path" "$@" > /dev/null
-
-  echo "Compression complete: $output_path"
+compress_zip() {
+  local output="compressed_files.zip"
+  echo "📦 Compressing to ZIP..."
+  zip -r "$output" "$@" > /dev/null
+  echo "✅ Created: $output"
 }
 
+compress_tar() {
+  local output="compressed_files.tar"
+  echo "📦 Compressing to TAR..."
+  tar -cf "$output" "$@"
+  echo "✅ Created: $output"
+}
+
+compress_targz() {
+  local output="compressed_files.tar.gz"
+  echo "📦 Compressing to TAR.GZ..."
+  tar -czf "$output" "$@"
+  echo "✅ Created: $output"
+}
+
+compress_tarbz2() {
+  local output="compressed_files.tar.bz2"
+  echo "📦 Compressing to TAR.BZ2..."
+  tar -cjf "$output" "$@"
+  echo "✅ Created: $output"
+}
+
+compress_tarxz() {
+  local output="compressed_files.tar.xz"
+  echo "📦 Compressing to TAR.XZ..."
+  tar -cJf "$output" "$@"
+  echo "✅ Created: $output"
+}
+
+compress_7z() {
+  local output="compressed_files.7z"
+  echo "📦 Compressing to 7Z..."
+  7z a "$output" "$@" > /dev/null
+  echo "✅ Created: $output"
+}
+
+compress_rar() {
+  local output="compressed_files.rar"
+  if command -v rar &> /dev/null; then
+    echo "📦 Compressing to RAR..."
+    rar a "$output" "$@" > /dev/null
+    echo "✅ Created: $output"
+  else
+    echo "❌ Error: RAR not installed (apt install rar)"
+    exit 1
+  fi
+}
+
+compress_tarzst() {
+  local output="compressed_files.tar.zst"
+  if command -v zstd &> /dev/null; then
+    echo "📦 Compressing to TAR.ZST..."
+    tar --zstd -cf "$output" "$@"
+    echo "✅ Created: $output"
+  else
+    echo "❌ Error: zstd not installed (apt install zstd)"
+    exit 1
+  fi
+}
+
+compress_iso() {
+  local output="compressed_files.iso"
+  if command -v genisoimage &> /dev/null; then
+    echo "📦 Creating ISO image..."
+    genisoimage -o "$output" -R -J "$@" > /dev/null 2>&1
+    echo "✅ Created: $output"
+  elif command -v mkisofs &> /dev/null; then
+    echo "📦 Creating ISO image..."
+    mkisofs -o "$output" -R -J "$@" > /dev/null 2>&1
+    echo "✅ Created: $output"
+  else
+    echo "❌ Error: genisoimage/mkisofs not installed (apt install genisoimage)"
+    exit 1
+  fi
+}
+
+compress_jar() {
+  local output="compressed_files.jar"
+  if command -v jar &> /dev/null; then
+    echo "📦 Compressing to JAR..."
+    jar -cf "$output" "$@"
+    echo "✅ Created: $output"
+  else
+    echo "📦 Compressing to JAR (using zip)..."
+    zip -r "$output" "$@" > /dev/null
+    echo "✅ Created: $output"
+  fi
+}
 
 # Function to extract files based on file type from the 'file' command or by file extension
 extract_file() {
@@ -31,12 +139,16 @@ extract_file() {
   # Use 'file' command to determine the type of the file
   file_info=$(file "$file_path")
 
-  echo "File info: $file_info"  # Debugging line to see what the 'file' command returns
+  echo "File info: $file_info"
 
   # Check the output from the 'file' command to determine how to decompress the file
   if [[ "$file_info" =~ "gzip compressed data" ]] || [[ "$file_info" =~ "GZIP compressed data" ]]; then
-    echo "Extracting gzip file (using pigz)..."
-    pigz -d "$file_path"
+    echo "Extracting gzip file..."
+    if command -v pigz &> /dev/null; then
+      pigz -d "$file_path"
+    else
+      gzip -d "$file_path"
+    fi
   elif [[ "$file_info" =~ "bzip2 compressed data" ]] || [[ "$file_info" =~ "BZIP2 compressed data" ]]; then
     echo "Extracting bzip2 file..."
     bzip2 -dk "$file_path"
@@ -70,11 +182,15 @@ extract_file() {
   else
     # If 'file' command doesn't recognize the type, fall back to extension
     ext="${file_path##*.}"
-    echo "Falling back to extension method: $ext"  # Debugging line
+    echo "Falling back to extension method: $ext"
     case "$ext" in
       gz)
-        echo "Extracting gzip file (using pigz) based on extension..."
-        pigz -d "$file_path"
+        echo "Extracting gzip file based on extension..."
+        if command -v pigz &> /dev/null; then
+          pigz -d "$file_path"
+        else
+          gzip -d "$file_path"
+        fi
         ;;
       bz2)
         echo "Extracting bzip2 file based on extension..."
@@ -123,39 +239,32 @@ extract_file() {
   fi
 }
 
-
 # Parse command line options
-if [ "$1" == "-cz" ]; then
+if [ "$1" == "-c" ]; then
   if [ -z "$2" ]; then
-    echo "Usage: $0 -cz <files_to_compress>"
+    echo "Usage: compr -c <files_to_compress>"
     exit 1
   fi
-  compress_7zip "${@:2}"
+  compress_interactive "${@:2}"
   exit 0
 fi
 
-if [ "$1" == "-cq" ]; then
-  if [ -z "$2" ]; then
-    echo "Usage: $0 -cq <files_to_compress>"
-    exit 1
-  fi
-  compress_zpaq "${@:2}"
-  exit 0
-fi
-
-# Check if the file path is provided for decompression or compression
+# Check if the file path is provided for decompression
 if [ -z "$1" ] || [ "$1" == "-h" ] || [ "$1" == "--help" ]; then
-  echo "Usage: compr <file_to_extract>"
-  echo "       compr -cz <files_to_compress_with_7zip>"
-  echo "       compr -cq <files_to_compress_with_zpaq>"
+  echo "Compress/Decompress Tool"
+  echo ""
+  echo "Usage:"
+  echo "  compr -c <files...>    Compress files (interactive menu)"
+  echo "  compr <archive>        Decompress/extract archive"
+  echo ""
+  echo "Examples:"
+  echo "  compr -c file1.txt file2.txt folder/"
+  echo "  compr archive.zip"
   exit 1
 fi
 
-if [ ! -f "$1" ] && [ "$1" != "-cz" ] && [ "$1" != "-cq" ]; then
-  echo "Error: '$1' is not a valid file or command."
-  echo "Usage: compr <file_to_extract>"
-  echo "       compr -cz <files_to_compress_with_7zip>"
-  echo "       compr -cq <files_to_compress_with_zpaq>"
+if [ ! -f "$1" ] && [ "$1" != "-c" ]; then
+  echo "Error: '$1' is not a valid file."
   exit 1
 fi
 
