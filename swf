@@ -1,69 +1,182 @@
 #!/usr/bin/env python3
-import re
 import argparse
 import os
+import re
+import shutil
+import subprocess
 import sys
 
-# Set up command line argument parser
-parser = argparse.ArgumentParser(description="Search for a word or pattern in a specific file.")
+parser = argparse.ArgumentParser(
+    description="Search for a word or pattern in a specific file."
+)
 parser.add_argument("file_path", help="The path to the file to search in.")
 parser.add_argument("search_term", help="The word or pattern to search for.")
-parser.add_argument("-p", "--pattern", action="store_true", help="Treat the search term as a regular expression pattern.")
+parser.add_argument(
+    "-p",
+    "--pattern",
+    action="store_true",
+    help="Treat the search term as a regular expression pattern.",
+)
+parser.add_argument(
+    "-a",
+    "--all",
+    action="store_true",
+    help="Return all matches (default returns first match for speed).",
+)
+args = parser.parse_args()
 
 blue_color = "\033[94m"
 yellow_color = "\033[93m"
 reset_color = "\033[0m"
 
-# Parse command line arguments
-args = parser.parse_args()
 
-filel=args.file_path
-search=args.search_term
-
-def get_absolute_path(file_path):
+def get_absolute_path(file_path: str) -> str:
     if os.path.isabs(file_path):
         return file_path
+    return os.path.join(os.getcwd(), file_path)
+
+
+def run_grep(filepath: str, search_term: str, use_pattern: bool, all_matches: bool):
+    if not shutil.which("grep"):
+        return None
+
+    if use_pattern:
+        cmd = ["grep", "-nEi", "--", search_term, filepath]
     else:
-        current_directory = os.getcwd()
-        return os.path.join(current_directory, file_path)
+        cmd = ["grep", "-nFwi", "--", search_term, filepath]
+    if not all_matches:
+        cmd.insert(1, "-m1")
 
-def escape_special_characters(pattern):
-    special_characters = r"[](){}.*+?|^$\\"
-    return "".join(f"\\{char}" if char in special_characters else char for char in pattern)
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        errors="replace",
+    )
 
-filepath = get_absolute_path(filel)
+    if result.returncode in (0, 1):
+        return result.stdout.splitlines()
 
+    err = result.stderr.strip() or "grep failed"
+    print(err)
+    sys.exit(1)
+
+
+def run_python_fallback(
+    filepath: str, search_term: str, use_pattern: bool, all_matches: bool
+):
+    if use_pattern:
+        try:
+            matcher = re.compile(search_term, re.IGNORECASE)
+        except re.error as exc:
+            print(f"Invalid regex pattern: {exc}")
+            sys.exit(1)
+    else:
+        matcher = re.compile(rf"\b{re.escape(search_term)}\b", re.IGNORECASE)
+
+    lines = []
+    with open(filepath, "r", errors="replace") as handle:
+        for idx, line in enumerate(handle, start=1):
+            if matcher.search(line):
+                lines.append(f"{idx}:{line.rstrip()}")
+                if not all_matches:
+                    break
+    return lines
+
+
+def run_look_fast_exact(filepath: str, search_term: str):
+    # Fast exact lookup for large sorted files.
+    if not shutil.which("look"):
+        return None
+
+    result = subprocess.run(
+        ["look", "-f", search_term, filepath],
+        capture_output=True,
+        text=True,
+        errors="replace",
+    )
+    if result.returncode not in (0, 1):
+        return None
+
+    for line in result.stdout.splitlines():
+        candidate = line.strip()
+        if candidate and candidate.lower() == search_term.lower():
+            return candidate
+        break
+    return None
+
+
+def get_phone_variants(search_term: str):
+    # Numeric-only query: support common "with 0 / without 0" lookup.
+    if not re.fullmatch(r"\d+", search_term):
+        return None
+
+    variants = {search_term}
+    if search_term.startswith("0"):
+        if len(search_term) > 1:
+            variants.add(search_term[1:])
+    else:
+        variants.add("0" + search_term)
+    return sorted(variants)
+
+
+def print_results(lines):
+    found = 0
+    for raw in lines:
+        line_number, sep, content = raw.partition(":")
+        if not sep:
+            continue
+        highlighted_line = f"{yellow_color}{line_number}{reset_color}"
+        print(f"Found on line {highlighted_line}: {blue_color}{content}{reset_color}")
+        found += 1
+
+    if found == 0:
+        print("No Result")
+    else:
+        print("Found", found, "Result")
+
+
+filepath = get_absolute_path(args.file_path)
 if not os.path.isfile(filepath):
     print("file not exist")
-    sys.exit(1) 
+    sys.exit(1)
 
-print("file: ",filepath)
-print("searching:  ",search)
+print("file: ", filepath)
+print("searching:  ", args.search_term)
 
-escaped_pattern = escape_special_characters(search)
-search = re.compile(escaped_pattern, re.IGNORECASE)
- 
-x=0
 try:
-    with open(filepath, 'r') as file:     
-        for line_number, line in enumerate(file, start=1):
-            l = yellow_color + str(line_number) + reset_color  # Convert line_number to string
-            # If -p/--pattern is specified, use re.search
-            if args.pattern and re.search(search, line):
-                print(f"Found on line {l}: {blue_color+line+reset_color}")
-                x+=1
-            # Otherwise, check for an exact word match
-            elif not args.pattern and re.search(r'\b' + search.pattern.lower() + r'\b', line.lower()):
-                print(f"Found on line {l}: {blue_color+line+reset_color}")
-                x+=1
-        if x == 0:
+    # For plain term search, try very fast sorted-file lookup first.
+    if not args.pattern:
+        fast_hit = run_look_fast_exact(filepath, args.search_term)
+        if fast_hit is not None:
+            print(f"Found (fast sorted lookup): {blue_color}{fast_hit}{reset_color}")
+            print("Found", 1, "Result")
+            sys.exit(0)
+
+    # For numeric pattern + all mode, avoid full scan:
+    # check both with/without leading zero directly.
+    if args.pattern and args.all:
+        phone_variants = get_phone_variants(args.search_term)
+        if phone_variants is not None:
+            found_values = []
+            for value in phone_variants:
+                fast_hit = run_look_fast_exact(filepath, value)
+                if fast_hit is not None and fast_hit not in found_values:
+                    found_values.append(fast_hit)
+            if found_values:
+                for value in found_values:
+                    print(f"Found (fast phone lookup): {blue_color}{value}{reset_color}")
+                print("Found", len(found_values), "Result")
+                sys.exit(0)
             print("No Result")
-        else:
-            print("Found",x,"Result")
+            sys.exit(0)
 
-
+    matches = run_grep(filepath, args.search_term, args.pattern, args.all)
+    if matches is None:
+        matches = run_python_fallback(
+            filepath, args.search_term, args.pattern, args.all
+        )
+    print_results(matches)
 except KeyboardInterrupt:
-            print("Stop searching, quitting")
-            sys.exit(1)
-except:
-    pass
+    print("Stop searching, quitting")
+    sys.exit(1)
